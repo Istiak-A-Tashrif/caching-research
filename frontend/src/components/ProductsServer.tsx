@@ -6,7 +6,6 @@ type Props = {
 };
 
 export default async function ProductsServer({ page, limit }: Props) {
-  const start = performance.now();
   const res = await fetch(
     `http://localhost:5001/api/products?page=${page}&limit=${limit}`,
     {
@@ -19,8 +18,6 @@ export default async function ProductsServer({ page, limit }: Props) {
   );
 
   const data = await res.json();
-  const end = performance.now();
-  console.log("[SSR] fetch + render time:", end - start);
 
   return <ProductsTable initialData={data?.data} page={page} limit={limit} />;
 }

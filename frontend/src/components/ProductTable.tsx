@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 type Props = {
   initialData: any;
@@ -12,17 +12,28 @@ type Props = {
 export default function ProductsTable({ initialData, page, limit }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const navStartRef = useRef<number>(0);
 
   const updateParams = (newPage: number, newLimit: number) => {
+    navStartRef.current = performance.now(); // ✅ navigation start
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(newPage));
     params.set("limit", String(newLimit));
     router.push(`?${params.toString()}`);
   };
 
+  if (navStartRef.current === 0) {
+    navStartRef.current = performance.now();
+  }
+
   useEffect(() => {
-    const t = performance.now();
-    console.log("[CSR] Table rendered at:", t);
+    if (!initialData) return;
+
+    const end = performance.now();
+    console.log(
+      "[CSR] Navigation → table rendered:",
+      end - navStartRef.current
+    );
   }, [initialData]);
 
   return (
