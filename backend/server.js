@@ -50,7 +50,7 @@ app.use((req, res, next) => {
   res.header({
     "cache-control": "no-store",
   });
-  req.startTime = Date.now();
+  req.startTime = performance.now();
   next();
 });
 
@@ -61,7 +61,8 @@ function getCacheKey(page, limit) {
 
 // Main API endpoint
 app.get("/api/products", async (req, res) => {
-  const page = parseInt(req.query.page - 1) || 0;
+  const page =
+    parseInt(req.query.page) <= 0 ? 0 : parseInt(req.query.page) - 1 || 0;
   const limit = parseInt(req.query.limit) || 50;
   const offset = page * limit;
   const cacheKey = getCacheKey(page, limit);
@@ -101,9 +102,9 @@ app.get("/api/products", async (req, res) => {
         ORDER BY p.id
         LIMIT $1 OFFSET $2
       `;
-      const dbStart = Date.now();
+      const dbStart = performance.now();
       const result = await pool.query(query, [limit, offset]);
-      dbTime = Date.now() - dbStart;
+      dbTime = performance.now() - dbStart;
 
       data = result.rows;
 
@@ -116,7 +117,7 @@ app.get("/api/products", async (req, res) => {
     }
 
     // Calculate backend processing time
-    const backendProcessingTime = Date.now() - req.startTime;
+    const backendProcessingTime = performance.now() - req.startTime;
 
     // Response with metrics
     res.json({
