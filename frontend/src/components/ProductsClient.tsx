@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-} from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import ProductsTable from "./ProductTable";
 
 type Props = {
@@ -12,7 +8,7 @@ type Props = {
   limit: number;
 };
 
-function ProductsPage({ page, limit }: Props) {
+export default function ProductsClient({ page, limit }: Props) {
   const { data } = useQuery({
     queryKey: ["products", page, limit],
     queryFn: async () => {
@@ -27,14 +23,4 @@ function ProductsPage({ page, limit }: Props) {
   });
 
   return <ProductsTable initialData={data?.data} page={page} limit={limit} />;
-}
-
-export default function ProductsClient({ page, limit }: Props) {
-  const queryClient = new QueryClient();
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ProductsPage page={page} limit={limit} />
-    </QueryClientProvider>
-  );
 }
