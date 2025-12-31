@@ -12,28 +12,61 @@ type Props = {
 export default function ProductsTable({ initialData, page, limit }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const navStartRef = useRef<number>(0);
+
+  // Measures SPA navigation timing
+  const navStartRef = useRef<number | null>(null);
+
+  // Used to avoid double logging on first render
+  const hasLoggedLoadRef = useRef(false);
 
   const updateParams = (newPage: number, newLimit: number) => {
-    navStartRef.current = performance.now(); // ✅ navigation start
+    navStartRef.current = performance.now(); // SPA navigation start
+
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(newPage));
     params.set("limit", String(newLimit));
+
     router.push(`?${params.toString()}`);
   };
-
-  if (navStartRef.current === 0) {
-    navStartRef.current = performance.now();
-  }
 
   useEffect(() => {
     if (!initialData) return;
 
-    const end = performance.now();
-    console.log(
-      "[CSR] Navigation → table rendered:",
-      end - navStartRef.current
-    );
+    const now = performance.now();
+
+    /**
+     * -----------------------------
+     * NDVT_NAV (SPA navigation)
+     * -----------------------------
+     */
+    if (navStartRef.current !== null) {
+      const ndvtNav = now - navStartRef.current;
+
+      console.log("[NDVT_NAV] SPA navigation → table rendered (ms):", ndvtNav);
+
+      // Reset so reloads don't reuse this
+      navStartRef.current = null;
+    }
+
+    /**
+     * -----------------------------
+     * NDVT_LOAD (cold load / reload)
+     * -----------------------------
+     */
+    if (!hasLoggedLoadRef.current) {
+      const navEntry = performance.getEntriesByType(
+        "navigation"
+      )[0] as PerformanceNavigationTiming | undefined;
+
+      if (navEntry) {
+        const ndvtLoad =
+          navEntry.domContentLoadedEventEnd - navEntry.startTime;
+
+        console.log("[NDVT_LOAD] Page load → table rendered (ms):", ndvtLoad);
+      }
+
+      hasLoggedLoadRef.current = true;
+    }
   }, [initialData]);
 
   return (
@@ -56,7 +89,7 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
 
         <select
           value={limit}
-          onChange={(e) => updateParams(0, Number(e.target.value))}
+          onChange={(e) => updateParams(1, Number(e.target.value))}
           className="border px-2 py-1"
         >
           {[10, 25, 50].map((l) => (
