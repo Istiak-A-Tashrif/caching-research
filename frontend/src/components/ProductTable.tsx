@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   initialData: any;
@@ -10,18 +10,48 @@ type Props = {
   limit: number;
 };
 
+
+function getMetrics() {
+  if (typeof window === "undefined") return null;
+
+  const raw = localStorage.getItem("perf_metrics");
+  return raw ? JSON.parse(raw) : { NDVT_LOAD: [], NDVT_NAV: [], RTLT: [] };
+}
+
+function saveMetric(type: "NDVT_LOAD" | "NDVT_NAV" | "RTLT", value: number) {
+  const metrics = getMetrics();
+  if (!metrics) return;
+
+  metrics[type].push(value);
+  localStorage.setItem("perf_metrics", JSON.stringify(metrics));
+}
+
+function calcStats(values: number[]) {
+  if (!values.length) return null;
+
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+
+  const variance =
+    values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+
+  return {
+    n: values.length,
+    mean: mean.toFixed(2),
+    std: Math.sqrt(variance).toFixed(2),
+  };
+}
+
 export default function ProductsTable({ initialData, page, limit }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Measures SPA navigation timing
   const navStartRef = useRef<number | null>(null);
-
-  // Used to avoid double logging on first render
   const hasLoggedLoadRef = useRef(false);
 
+  const [stats, setStats] = useState<any>(null);
+
   const updateParams = (newPage: number, newLimit: number) => {
-    navStartRef.current = performance.now(); // SPA navigation start
+    navStartRef.current = performance.now();
 
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(newPage));
@@ -30,44 +60,46 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
     router.push(`?${params.toString()}`);
   };
 
+  const refreshStats = () => {
+    const metrics = getMetrics();
+    if (!metrics) return;
+
+    setStats({
+      NDVT_LOAD: calcStats(metrics.NDVT_LOAD),
+      NDVT_NAV: calcStats(metrics.NDVT_NAV),
+      RTLT: calcStats(metrics.RTLT),
+    });
+  };
+
   useEffect(() => {
     if (!initialData) return;
 
     const now = performance.now();
 
     /**
-     * -----------------------------
-     * RTLT — Route Transition Load Time (SPA navigation)
-     * -----------------------------
+     * RTLT — /test → /
      */
-
     const start = performance.getEntriesByName("route_nav_start_p_to_home")[0];
 
-    if (start && initialData) {
-      const now = performance.now();
-      console.log("[RTLT] /test → / rendered (ms):", now - start.startTime);
-
+    if (start) {
+      const value = now - start.startTime;
+      saveMetric("RTLT", value);
+      console.log("[RTLT] /test → / rendered (ms):", value);
       performance.clearMarks("route_nav_start_p_to_home");
     }
 
     /**
-     * -----------------------------
-     * NDVT_NAV (SPA navigation) // Navigation-to-Data-Visible Time (NDVT)
-     * -----------------------------
+     * NDVT_NAV — same-page SPA navigation
      */
     if (navStartRef.current !== null) {
-      const ndvtNav = now - navStartRef.current;
-
-      console.log("[NDVT_NAV] SPA navigation → table rendered (ms):", ndvtNav);
-
-      // Reset so reloads don't reuse this
+      const value = now - navStartRef.current;
+      saveMetric("NDVT_NAV", value);
+      console.log("[NDVT_NAV] SPA navigation → table rendered (ms):", value);
       navStartRef.current = null;
     }
 
     /**
-     * -----------------------------
-     * NDVT_LOAD (cold load / reload)
-     * -----------------------------
+     * NDVT_LOAD — cold load
      */
     if (!hasLoggedLoadRef.current && !start) {
       const navEntry = performance.getEntriesByType("navigation")[0] as
@@ -75,22 +107,40 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
         | undefined;
 
       if (navEntry) {
-        const ndvtLoad = navEntry.domContentLoadedEventEnd - navEntry.startTime;
-
-        console.log("[NDVT_LOAD] Page load → table rendered (ms):", ndvtLoad);
+        const value = navEntry.domContentLoadedEventEnd - navEntry.startTime;
+        saveMetric("NDVT_LOAD", value);
+        console.log("[NDVT_LOAD] Page load → table rendered (ms):", value);
       }
 
       hasLoggedLoadRef.current = true;
     }
+
+    refreshStats();
   }, [initialData]);
 
   return (
-    <div className="space-y-3">
+    <div className="relative space-y-3">
+      {/* Stats Panel */}
+      {stats && (
+        <div className="absolute right-0 top-0 text-xs border p-2 bg-white">
+          <div className="font-semibold mb-1">Performance (ms)</div>
+
+          {Object.entries(stats).map(([k, v]: any) =>
+            v ? (
+              <div key={k}>
+                <strong>{k}</strong> → μ:{v.mean} σ:{v.std} (n={v.n})
+              </div>
+            ) : null
+          )}
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex gap-2">
         <Link href="/test" className="border px-2 py-1">
           Go to /test
         </Link>
+
         <button
           onClick={() => updateParams(Math.max(page - 1, 1), limit)}
           className="border px-2 py-1"
