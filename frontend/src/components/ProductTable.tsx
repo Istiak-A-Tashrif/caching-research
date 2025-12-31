@@ -10,7 +10,6 @@ type Props = {
   limit: number;
 };
 
-
 function getMetrics() {
   if (typeof window === "undefined") return null;
 
@@ -89,12 +88,24 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
     }
 
     /**
-     * NDVT_NAV — same-page SPA navigation
+     * NDVT_NAV — only when:
+     *  - navigated from another page
+     *  - landed on page=1 & limit=25
      */
-    if (navStartRef.current !== null) {
+    if (
+      navStartRef.current !== null &&
+      page === 1 &&
+      limit === 25
+    ) {
       const value = now - navStartRef.current;
+
       saveMetric("NDVT_NAV", value);
-      console.log("[NDVT_NAV] SPA navigation → table rendered (ms):", value);
+
+      console.log(
+        "[NDVT_NAV] Cross-page → canonical view rendered (ms):",
+        value
+      );
+
       navStartRef.current = null;
     }
 
