@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 
@@ -36,7 +37,22 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
 
     /**
      * -----------------------------
-     * NDVT_NAV (SPA navigation)
+     * RTLT — Route Transition Load Time (SPA navigation)
+     * -----------------------------
+     */
+
+    const start = performance.getEntriesByName("route_nav_start_p_to_home")[0];
+
+    if (start && initialData) {
+      const now = performance.now();
+      console.log("[RTLT] /test → / rendered (ms):", now - start.startTime);
+
+      performance.clearMarks("route_nav_start_p_to_home");
+    }
+
+    /**
+     * -----------------------------
+     * NDVT_NAV (SPA navigation) // Navigation-to-Data-Visible Time (NDVT)
      * -----------------------------
      */
     if (navStartRef.current !== null) {
@@ -53,14 +69,13 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
      * NDVT_LOAD (cold load / reload)
      * -----------------------------
      */
-    if (!hasLoggedLoadRef.current) {
-      const navEntry = performance.getEntriesByType(
-        "navigation"
-      )[0] as PerformanceNavigationTiming | undefined;
+    if (!hasLoggedLoadRef.current && !start) {
+      const navEntry = performance.getEntriesByType("navigation")[0] as
+        | PerformanceNavigationTiming
+        | undefined;
 
       if (navEntry) {
-        const ndvtLoad =
-          navEntry.domContentLoadedEventEnd - navEntry.startTime;
+        const ndvtLoad = navEntry.domContentLoadedEventEnd - navEntry.startTime;
 
         console.log("[NDVT_LOAD] Page load → table rendered (ms):", ndvtLoad);
       }
@@ -73,6 +88,9 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
     <div className="space-y-3">
       {/* Controls */}
       <div className="flex gap-2">
+        <Link href="/test" className="border px-2 py-1">
+          Go to /test
+        </Link>
         <button
           onClick={() => updateParams(Math.max(page - 1, 1), limit)}
           className="border px-2 py-1"

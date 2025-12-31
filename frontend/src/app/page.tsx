@@ -9,8 +9,8 @@ export default async function Home({
 }) {
   const { page, limit } = await searchParams;
   return process.env.NEXT_PUBLIC_IS_SSR === "true" ? (
-    <ProductsServer page={Number(page ?? 1)} limit={Number(limit ?? 10)} />
+    <ProductsServer page={Number(page ?? 1)} limit={Number(limit ?? 25)} />
   ) : (
-    <ProductsClient page={Number(page ?? 1)} limit={Number(limit ?? 10)} />
+    <ProductsClient page={Number(page ?? 1)} limit={Number(limit ?? 25)} />
   );
 }
