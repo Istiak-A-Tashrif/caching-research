@@ -80,7 +80,7 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
      */
     const start = performance.getEntriesByName("route_nav_start_p_to_home")[0];
 
-    if (start) {
+    if (start && page === 1 && limit === 25) {
       const value = now - start.startTime;
       saveMetric("RTLT", value);
       console.log("[RTLT] /test → / rendered (ms):", value);
@@ -101,7 +101,7 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
      * NDVT_LOAD — cold load (SSR hydration)
      * Use a more accurate timing for React hydration
      */
-    if (!hasLoggedLoadRef.current && navStartRef.current === null) {
+    if (!hasLoggedLoadRef.current && !start && page === 1 && limit === 25) {
       const navEntry = performance.getEntriesByType("navigation")[0] as
         | PerformanceNavigationTiming
         | undefined;
