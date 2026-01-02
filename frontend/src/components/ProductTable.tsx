@@ -88,37 +88,27 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
     }
 
     /**
-     * NDVT_NAV — only when:
-     *  - navigated from another page
-     *  - landed on page=1 & limit=25
+     * NDVT_NAV — navigation in same route
      */
-    if (
-      navStartRef.current !== null &&
-      page === 1 &&
-      limit === 25
-    ) {
+    if (navStartRef.current !== null && page === 1 && limit === 25) {
       const value = now - navStartRef.current;
-
       saveMetric("NDVT_NAV", value);
-
-      console.log(
-        "[NDVT_NAV] Cross-page → canonical view rendered (ms):",
-        value
-      );
-
+      console.log("[NDVT_NAV] Navigation → view rendered (ms):", value);
       navStartRef.current = null;
     }
 
     /**
-     * NDVT_LOAD — cold load
+     * NDVT_LOAD — cold load (SSR hydration)
+     * Use a more accurate timing for React hydration
      */
-    if (!hasLoggedLoadRef.current && !start) {
+    if (!hasLoggedLoadRef.current && navStartRef.current === null) {
       const navEntry = performance.getEntriesByType("navigation")[0] as
         | PerformanceNavigationTiming
         | undefined;
 
       if (navEntry) {
-        const value = navEntry.domContentLoadedEventEnd - navEntry.startTime;
+        // Better: measure from navigationStart to now (actual render complete)
+        const value = now - navEntry.startTime;
         saveMetric("NDVT_LOAD", value);
         console.log("[NDVT_LOAD] Page load → table rendered (ms):", value);
       }
@@ -127,7 +117,7 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
     }
 
     refreshStats();
-  }, [initialData]);
+  }, [initialData, page, limit]); // Add dependencies
 
   return (
     <div className="relative space-y-3">
