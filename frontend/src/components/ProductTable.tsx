@@ -18,6 +18,7 @@ function getMetrics() {
 }
 
 function saveMetric(type: "NDVT_LOAD" | "NDVT_NAV" | "RTLT", value: number) {
+
   const metrics = getMetrics();
   if (!metrics) return;
 
@@ -29,7 +30,6 @@ function calcStats(values: number[]) {
   if (!values.length) return null;
 
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
-
   const variance =
     values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
 
@@ -48,6 +48,8 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
   const hasLoggedLoadRef = useRef(false);
 
   const [stats, setStats] = useState<any>(null);
+
+  const isCanonicalView = page === 1 && limit === 25;
 
   const updateParams = (newPage: number, newLimit: number) => {
     navStartRef.current = performance.now();
@@ -76,56 +78,67 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
     const now = performance.now();
 
     /**
-     * RTLT — /test → /
+     * RTLT — /test → / 
+     * Only measure if coming from /test route
      */
-    const start = performance.getEntriesByName("route_nav_start_p_to_home")[0];
+    const rtltMark = performance.getEntriesByName("route_nav_start_p_to_home")[0];
 
-    if (start && page === 1 && limit === 25) {
-      const value = now - start.startTime;
+    if (rtltMark) {
+      const value = now - rtltMark.startTime;
       saveMetric("RTLT", value);
-      console.log("[RTLT] /test → / rendered (ms):", value);
       performance.clearMarks("route_nav_start_p_to_home");
+      refreshStats();
     }
 
     /**
-     * NDVT_NAV — navigation in same route
+     * NDVT_NAV — SPA navigation to canonical view
+     * Only measure when:
+     * 1. User navigated within same route (navStartRef is set)
+     * 2. Landed on canonical view (page=1, limit=25)
+     * 3. NOT an initial page load (!rtltMark means not from /test)
      */
-    if (navStartRef.current !== null && page === 1 && limit === 25) {
+    if (
+      navStartRef.current !== null &&
+      isCanonicalView &&
+      !rtltMark // Ensure it's not a cross-route navigation
+    ) {
       const value = now - navStartRef.current;
       saveMetric("NDVT_NAV", value);
-      console.log("[NDVT_NAV] Navigation → view rendered (ms):", value);
       navStartRef.current = null;
+      refreshStats();
     }
 
     /**
-     * NDVT_LOAD — cold load (SSR hydration)
-     * Use a more accurate timing for React hydration
+     * NDVT_LOAD — Initial page load (SSR/hydration)
+     * Fallback if PerformanceObserver doesn't catch it
      */
-    if (!hasLoggedLoadRef.current && !start && page === 1 && limit === 25) {
+    if (
+      !hasLoggedLoadRef.current &&
+      isCanonicalView &&
+      !rtltMark &&
+      navStartRef.current === null
+    ) {
       const navEntry = performance.getEntriesByType("navigation")[0] as
         | PerformanceNavigationTiming
         | undefined;
 
       if (navEntry) {
-        // Better: measure from navigationStart to now (actual render complete)
+        // Measure from navigation start to component render
+        // This captures: network + parsing + hydration + render
         const value = now - navEntry.startTime;
         saveMetric("NDVT_LOAD", value);
-        console.log("[NDVT_LOAD] Page load → table rendered (ms):", value);
+        hasLoggedLoadRef.current = true;
+        refreshStats();
       }
-
-      hasLoggedLoadRef.current = true;
     }
-
-    refreshStats();
-  }, [initialData, page, limit]); // Add dependencies
+  }, [initialData, page, limit]);
 
   return (
     <div className="relative space-y-3">
       {/* Stats Panel */}
       {stats && (
-        <div className="absolute right-0 top-0 text-xs border p-2 bg-white">
+        <div className="absolute right-0 top-0 text-xs border p-2 bg-white shadow-sm">
           <div className="font-semibold mb-1">Performance (ms)</div>
-
           {Object.entries(stats).map(([k, v]: any) =>
             v ? (
               <div key={k}>
@@ -133,25 +146,35 @@ export default function ProductsTable({ initialData, page, limit }: Props) {
               </div>
             ) : null
           )}
+          <button
+            onClick={() => {
+              localStorage.removeItem("perf_metrics");
+              setStats(null);
+            }}
+            className="mt-2 text-red-600 underline"
+          >
+            Clear
+          </button>
         </div>
       )}
 
       {/* Controls */}
       <div className="flex gap-2">
-        <Link href="/test" className="border px-2 py-1">
+        <Link href="/test" className="border px-2 py-1 hover:bg-gray-50">
           Go to /test
         </Link>
 
         <button
           onClick={() => updateParams(Math.max(page - 1, 1), limit)}
-          className="border px-2 py-1"
+          className="border px-2 py-1 hover:bg-gray-50"
+          disabled={page === 1}
         >
           Prev
         </button>
 
         <button
           onClick={() => updateParams(page + 1, limit)}
-          className="border px-2 py-1"
+          className="border px-2 py-1 hover:bg-gray-50"
         >
           Next
         </button>
